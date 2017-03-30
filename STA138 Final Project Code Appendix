@@ -1,0 +1,92 @@
+#Problem 1
+library(readr)
+library(nnet)
+library(bestglm)
+library(ResourceSelection)
+library(LogisticDx)
+library(pROC)
+student <- read_csv("C:/Users/Lam/Desktop/STA138/student.csv")
+Z=table(student[,c(1,2,7,8)])
+mosaicplot(Z,main="Mosaic Plot")
+empty.model = multinom(ses ~ 1,data =student,trace = FALSE)
+full.model = multinom(ses ~ gender+math+schtyp +honors +write + read+science,data = student,trace = FALSE)
+best.forward.AIC = step(empty.model,scope = list(lower = empty.model, upper = full.model),direction = "forward", criterion = "AIC", trace = FALSE)
+best.backward.AIC = step(full.model,scope = list(lower = empty.model, upper = full.model),direction = "backward", criterion = "AIC", trace = FALSE)
+best.FB.AIC = step(empty.model,scope = list(lower = empty.model, upper = full.model),direction = "both", criterion = "AIC", trace = FALSE)
+best.BF.AIC = step(full.model,scope = list(lower = empty.model, upper = full.model),direction = "both", criterion = "AIC", trace = FALSE)
+GOF.Multi = function(the.model){
+  num.para = the.model$edf
+  n = nrow(the.model$residuals)
+  LL = logLik(the.model)
+  df.model = n - num.para
+  AIC = -2*logLik(the.model) +2*the.model$edf
+  BIC = -2*logLik(the.model) +log(n)*the.model$edf
+  the.results = c(LL,num.para,df.model,AIC,BIC)
+  names(the.results) = c("LL","K","D.F.","AIC","BIC")
+  return(the.results)
+}
+mn.best.model=multinom(ses ~ gender+schtyp+read+honors,data = student,trace = FALSE)
+GOF.Multi(mn.best.model)
+student$gender=ifelse(student$gender == "Male",1,0) #Male=1, Female=0
+student$honors=ifelse(student$honors == "Yes",1,0) #Honors=1, Not Honors=0
+student$schtyp=ifelse(student$schtyp == "public",1,0) #Public=1, Private=0
+split.data=split(student,student$ses)
+LvsH = rbind(split.data[[2]], split.data[[1]]) #Low vs High
+MvsH = rbind(split.data[[3]], split.data[[1]])
+LvsHX=as.matrix(LvsH[,1:7])
+y=ifelse(LvsH$ses == "low",1,0)
+L.H.Xy=as.data.frame(cbind(LvsHX,y))
+LvsH.best.subset.AIC = bestglm(Xy =L.H.Xy, family = binomial(link=logit),IC = "AIC",method = "exhaustive")
+LvsH.best.subset.AICmod = glm(y~ schtyp+read+math ,data = L.H.Xy,family = binomial(link=logit))
+MvsHX=as.matrix(MvsH[,1:7])
+y=ifelse(MvsH$ses == "middle",1,0)
+M.H.Xy=as.data.frame(cbind(MvsHX,y))
+MvsH.best.subset.AIC = bestglm(Xy =M.H.Xy, family = binomial(link=logit),IC = "AIC",method = "exhaustive")
+MvsH.best.subset.AICmod = glm(y~ read ,data = M.H.Xy,family = binomial(link=logit))
+HL.test = hoslem.test(LvsH.best.subset.AICmod$y, LvsH.best.subset.AICmod$fitted.values,g = 10)
+HL.test = hoslem.test(MvsH.best.subset.AICmod$y, MvsH.best.subset.AICmod$fitted.values,g = 10)
+good.stuff = dx(LvsH.best.subset.AICmod)
+hist(good.stuff$sPr, main = "Pearson Standardized Residuals")
+good.stuff = dx(MvsH.best.subset.AICmod)
+hist(good.stuff$sPr, main = "Pearson Standardized Residuals")
+r = cor(LvsH.best.subset.AICmod$y,LvsH.best.subset.AICmod$fitted.values)
+prop.red = 1- sum((LvsH.best.subset.AICmod$y -LvsH.best.subset.AICmod$fitted.values)^2)/sum((LvsH.best.subset.AICmod$y - mean(LvsH.best.subset.AICmod$y))^2)
+r = cor(MvsH.best.subset.AICmod$y,MvsH.best.subset.AICmod$fitted.values)
+prop.red = 1- sum((MvsH.best.subset.AICmod$y -MvsH.best.subset.AICmod$fitted.values)^2)/sum((MvsH.best.subset.AICmod$y - mean(MvsH.best.subset.AICmod$y))^2)
+the.roc = roc(LvsH.best.subset.AICmod$y, LvsH.best.subset.AICmod$fitted.values,auc = TRUE, ci = TRUE,plot=TRUE, legacy.axes = TRUE)
+auc(the.roc)
+ci(the.roc)
+the.roc = roc(MvsH.best.subset.AICmod$y, MvsH.best.subset.AICmod$fitted.values,auc = TRUE, ci = TRUE,plot=TRUE, legacy.axes = TRUE)
+auc(the.roc)
+ci(the.roc)
+pi0 =0.50
+my.table = table(truth = LvsH.best.subset.AICmod$y,predict = ifelse(fitted(LvsH.best.subset.AICmod)>pi0,1,0))
+my.table = table(truth = MvsH.best.subset.AICmod$y,predict =ifelse(fitted(MvsH.best.subset.AICmod)>pi0,1,0))
+predict(LvsH.best.subset.AICmod, newdata = data.frame(gender =1,read=60,write=60,math=60,science=60,honors=0, schtyp=0),type = "response")
+predict(MvsH.best.subset.AICmod, newdata = data.frame(gender =1,read=60,write=60,math=60,science=60,honors=0, schtyp=0),type = "response")
+
+#Problem 2
+baby<- read_csv("C:/Users/Lam/Desktop/STA138/baby.csv")
+Z=table(baby[,c(1,2,7,8)])
+mosaicplot(Z,main="Mosaic Plot")
+logit.model= glm(formula = low~ age+weight+smoke+pre+hyp+visits, family = binomial(logit), data = baby)
+baby$smoke=ifelse(baby$smoke == "no",0,1)
+baby$pre=ifelse(baby$pre == "no",0,1)
+baby$hyp=ifelse(baby$hyp == "no",0,1)
+X=baby[,1:6]
+y=baby[,7]
+Xy=as.data.frame(cbind(X,y))
+best.subset.AIC = bestglm(Xy =Xy, family = binomial(link=logit),IC = "AIC",method = "exhaustive")
+best.subset.AICmod = glm(low~ age+weight+smoke+pre+hyp ,data = Xy,family = binomial(link=logit))
+HL.test = hoslem.test(best.subset.AICmod$y,best.subset.AICmod$fitted.values,g = 10)
+good.stuff = dx(best.subset.AICmod)
+hist(good.stuff$sPr, main = "Pearson Standardized Residuals")
+r = cor(best.subset.AICmod$y,best.subset.AICmod$fitted.values)
+prop.red = 1- sum((best.subset.AICmod$y -best.subset.AICmod$fitted.values)^2)/sum((best.subset.AICmod$y - mean(best.subset.AICmod$y))^2)
+the.roc = roc(best.subset.AICmod$y, best.subset.AICmod$fitted.values,auc = TRUE, ci = TRUE,plot=TRUE, legacy.axes = TRUE)
+#high AUC suggests model fit the data well
+auc(the.roc)
+ci(the.roc)
+pi0 =0.50
+my.table = table(truth = best.subset.AICmod$y,predict = ifelse(fitted(best.subset.AICmod)>pi0,1,0))
+predict(best.subset.AICmod, newdata = data.frame(weight=157,age=29,smoke=0,pre=0,hyp=0,visits=10),type = "response")
