@@ -1,0 +1,75 @@
+
+#Problem 1
+library(readr)
+Car <- read_csv("C:/Users/Lam/Desktop/STA138/Car.csv")
+logit.model= glm(formula = Y ~ X, family = binomial(logit), data = Car)
+#plot
+plot(Car$X,logit.model$fitted.values,main="Logistic Curve",ylab ="Estimated Probabilities",xlab="Age in Months")
+curve(predict(logit.model, data.frame(X=x), type="response"), add=TRUE) 
+logit.model
+#exp(B1)
+exp(0.07635)
+ #value of X when prob is 0.5
+2.65826  /0.07635 
+#The Wald Test Statistic and its corresponding p-value
+wald.ts = summary(logit.model)$coefficients[2,3]
+wald.pval = round(summary(logit.model)$coefficients[2,4],8)
+#The Likelihood Ratio Test Statistic and its corresponding p-value
+smaller.model = glm(Y~ 1, family = binomial(logit), data = Car)
+LR = as.numeric(-2*(logLik(smaller.model) - logLik(logit.model)))
+d.f. = length(logit.model$coefficients) - length(smaller.model$coefficients)
+p.val.LR = round(pchisq(LR, d.f.,lower.tail = FALSE),8)
+#95% Likelihood Ratio Confidence Interval of exp(B1)
+CI = round(exp(as.numeric(confint(logit.model)[2,],level = 0.95)),4) 
+
+#Problem 2
+library(readr)
+Trial.S<- read_csv("C:/Users/Lam/Desktop/STA138/TrialsShort.csv")
+Trial.L<- read_csv("C:/Users/Lam/Desktop/STA138/TrialsLong.csv")
+z.t=table(Trial.L)
+#plot
+mosaicplot(z.t,main="Mosaic Plot",xlab="Frequency", ylab="Status on Condition")
+good.fit.LL = function(the.model){
+  K = length(the.model$coefficients)
+  df.model = length(the.model$residuals) - K
+  Pearson.TS = round(sum(residuals(the.model,type = "pearson")^2),4)
+  LL = as.numeric(logLik(the.model))
+  Dev = round(the.model$deviance,4)
+  the.AIC = AIC(the.model)
+  the.BIC = BIC(the.model)
+  pval.Pear = round(pchisq(Pearson.TS,df.model,lower.tail = F),digits =8)
+  pval.LR = round(pchisq(Dev,df.model,lower.tail = F),digits =8)
+  All.GOF = c(LL,Dev,Pearson.TS,df.model,pval.LR,pval.Pear,the.AIC,the.BIC)
+  names(All.GOF) = c("Log-Li","LR","Pearson","df", "p-val:LR","p-val:Pear","AIC", "BIC")
+  return(All.GOF)
+}
+all.model.formulas = c("F~X+Y+Z","F~X+Y+Z+Y*Z","F~X+Y+Z+X*Z","F~X+Y+Z+X*Y",     
+"F~X+Y+Z+X*Y+X*Z","F~X+Y+Z+X*Y+Y*Z","F~X+Y+Z+X*Z+Y*Z","F~X+Y+Z+X*Y+X*Z+Y*Z","F~X+Y+Z+X*Y+X*Z+Y*Z+X*Y*Z")
+the.model =  glm(formula =F ~X + Y+Z, family =poisson, data =Trial.S)
+all.model.fits = lapply(all.model.formulas,function(the.model){
+  glm(the.model,data = Trial.S, family = poisson)
+})
+all.GOF = sapply(all.model.fits,function(the.model){
+  good.fit.LL(the.model)
+}) 
+all.GOF = t(all.GOF)
+rownames(all.GOF) = all.model.formulas
+round(all.GOF,digits =4) 
+#Model of best fit
+chosen.model=all.model.fits[[6]]
+#Test Statistics, p-value and information criterion
+round(good.fit.LL(chosen.model),4)
+#Odds Ratios
+exp( 0.4137099)
+exp(0.8483414)
+#95% Wald Confidence Intervals
+alpha = 0.05
+za = qnorm(1-alpha/2)
+lower.bound = summary(chosen.model)$coefficients[,1] -za*summary(chosen.model)$coefficients[,2]
+upper.bound = summary(chosen.model)$coefficients[,1] +za*summary(chosen.model)$coefficients[,2]
+CIs = cbind(lower.bound,upper.bound)
+#95% Likelihood Ratio Confidence Intervals
+LRci=confint(chosen.model,level = (1-alpha))
+
+
+
